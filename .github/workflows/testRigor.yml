@@ -1,0 +1,77 @@
+# This is a basic workflow to help you get started with Actions
+
+name: testrigor
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the "main" branch
+  push:
+    branches: [ "main" ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "build"
+  build:
+    # The type of runner that the job will run on
+    runs-on: ubuntu-latest
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v4
+      # Runs a set of commands using the runners shell
+      - name: Run a multi-line script
+        run: |
+          curl -X POST \
+            -H 'Content-type: application/json' \
+            -H 'auth-token: e0c06099-35e1-456b-956b-aaa4cb6c4a89' \
+            --data '{"forceCancelPreviousTesting":true,"storedValues":{"storedValueName1":"Value"}}' \
+            https://api.testrigor.com/api/v1/apps/ytd8wTv9LncfCit95/retest
+          
+          sleep 10
+          
+          while true
+          do
+            echo " "
+            echo "==================================="
+            echo " Checking run status"
+            echo "==================================="
+            response=$(curl -i -o - -s -X GET 'https://api.testrigor.com/api/v1/apps/ytd8wTv9LncfCit95/status' -H 'auth-token: e0c06099-35e1-456b-956b-aaa4cb6c4a89' -H 'Accept: application/json')
+            code=$(echo "$response" | grep HTTP |  awk '{print $2}')
+            body=$(echo "$response" | sed -n '/{/,/}/p')
+            echo "Status code: " $code
+            echo "Response: " $body
+            case $code in
+              4*|5*)
+                # 400 or 500 errors
+                echo "Error calling API"
+                exit 1
+                ;;
+              200)
+                # 200: successfully finished
+                echo "Test finished successfully"
+                exit 0
+                ;;
+              227|228)
+                # 227: New - 228: In progress
+                echo "Test is not finished yet"
+                ;;
+              229)
+                # 229: Canceled
+                echo "Test canceled"
+                exit 1
+                ;;
+              230)
+                # 230: Failed
+                echo "Test finished but failed"
+                exit 1
+                ;;
+              *)
+                echo "Unknown status"
+                exit 1
+              esac
+            sleep 10
+          done
